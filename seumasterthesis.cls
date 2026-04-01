@@ -52,8 +52,10 @@
 \setmainfont[Mapping=tex-text]{Times New Roman}
 \renewcommand{\cftchapleader}{\bfseries\cftdotfill{\cftdotsep}}
 \newcommand{\cmufont}{\fontspec{CMU Serif}}
-%\newcommand{\codefont}{\fontspec{Consolas}}                %% Microsoft Windows
-\newcommand{\codefont}{\fontspec{Ubuntu Mono}}              %% Ubuntu GNU/Linux
+\newcommand{\codefont}{\fontspec{Consolas}}                %% Microsoft Windows
+% \newcommand{\codefont}{\fontspec{Ubuntu Mono}}           %% Ubuntu GNU/Linux
+\newCJKfontfamily\seuemphheiti[AutoFakeBold=4]{SimHei}
+\DeclareTextFontCommand{\emph}{\seuemphheiti\bfseries}
 
 %% Font size
 \newcommand{\chuhao}{\fontsize{42bp}{46bp}\selectfont}
@@ -181,10 +183,20 @@
 \captionsetup[table]{labelsep=space}
 \captionsetup[figure]{labelsep=space}
 \RequirePackage{graphicx}
+\RequirePackage{adjustbox}
+\RequirePackage{array}
+\RequirePackage{tabularx}
 \RequirePackage{booktabs}
 \renewcommand{\toprule}{\specialrule{.08em}{0pt}{.5ex}}
 \renewcommand{\midrule}{\specialrule{.03em}{.5ex}{.5ex}}
 \renewcommand{\bottomrule}{\specialrule{.08em}{.5ex}{0pt}}
+\newenvironment{autofittabular}[1]
+  {\begin{adjustbox}{max width=\linewidth}\begin{tabular}{#1}}
+  {\end{tabular}\end{adjustbox}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newenvironment{autofitxtabular}[1]
+  {\tabularx{\linewidth}{#1}}
+  {\endtabularx}
 \RequirePackage{subfig}
 
 %% ----------------------------------------------------------------------------
@@ -204,6 +216,56 @@
     filecolor=magenta,
     menucolor=red,
     urlcolor=magenta
+}
+
+% Smart references by label prefix:
+% chp:* -> 第一章, sec:* -> 1.1 节, subsec:* -> 1.1.1 小节.
+\newcommand{\seuoldref}{}
+\def\seu@getlabelprefix#1:#2\@nil{#1}
+\newcommand{\seusmartref}[1]{%
+    \begingroup
+    \edef\seu@prefix{\expandafter\seu@getlabelprefix#1:\@nil}%
+    \def\seu@chapterprefix{chp}%
+    \def\seu@sectionprefix{sec}%
+    \def\seu@subsectionprefix{subsec}%
+    \def\seu@figureprefix{fig}%
+    \def\seu@tableprefix{tab}%
+    \def\seu@algorithmprefix{alg}%
+    \def\seu@equationprefix{eq}%
+    \ifx\seu@prefix\seu@chapterprefix
+        第\seuoldref{#1}章%
+    \else
+        \ifx\seu@prefix\seu@sectionprefix
+            \seuoldref{#1} 节%
+        \else
+            \ifx\seu@prefix\seu@subsectionprefix
+                \seuoldref{#1} 小节%
+            \else
+                \ifx\seu@prefix\seu@figureprefix
+                    \seuoldref{#1}\space
+                \else
+                    \ifx\seu@prefix\seu@tableprefix
+                        \seuoldref{#1}\space
+                    \else
+                        \ifx\seu@prefix\seu@algorithmprefix
+                            \seuoldref{#1}\space
+                        \else
+                            \ifx\seu@prefix\seu@equationprefix
+                                \seuoldref{#1}\space
+                            \else
+                                \seuoldref{#1}%
+                            \fi
+                        \fi
+                    \fi
+                \fi
+            \fi
+        \fi
+    \fi
+    \endgroup
+}
+\AtBeginDocument{%
+    \let\seuoldref\ref
+    \renewcommand{\ref}[1]{\seusmartref{#1}}%
 }
 
 %% ----------------------------------------------------------------------------

@@ -354,7 +354,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 
 总体而言，上述对比方法涵盖了从输出概率信息到内部表征结构信息、再到本文所提出的多方向链式建模方法的不同技术路线，有助于从多个层面验证本文方法的有效性与相对优势。
 
-\subsection{结果分析}\label{subsec:result_analysis}
+\subsection{结果分析}
 
 本文ATScore及对比方法的主实验结果如表~\ref{tab:mgsm}、表~\ref{tab:csqa}、表~\ref{tab:belebele}、表~\ref{tab:theoremqa}及表~\ref{tab:truthfulqa}所示，各项评价指标中的最佳结果以\textbf{粗体}展示。
 
@@ -491,22 +491,6 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \item \emph{以token为主方向的算法性能更优。}从不同变体之间的比较结果可以看出，链式表征的构造方向以及构造几何指标的选取都会对最终检测效果产生影响。总体而言，ATScore$_\mathrm{token}$与ATScore$_\mathrm{layer}$均能够取得较好的结果，说明无论沿layer方向还是沿token方向构建链式表征，内部激活张量的不同维度中都蕴含着与幻觉相关的有效信息；这一点从侧面验证了本文提出的多方向链式表征建模思路的合理性，并为内部表征建模提供了一种新的、可行的对偶视角。进一步地，ATScore$_\mathrm{token}$在多数情况下优于ATScore$_\mathrm{layer}$，说明沿token方向构建表示链能够更直接、精确地刻画生成序列逐步展开过程中的动态语义偏移，从而更有利于识别幻觉样本。
   \item \emph{几何指标的选取与链式表征方向有关。}对于考虑链节点间的平均长度或平均转折角度两种集合构建方式的变体，可观察得到：在以layer为主方向的方法中，平均转折角度（ATScore$_{\mathrm{layer}}$-Ang）通常性能更优，而在以token为主方向的方法中，平均长度ATScore$_{\mathrm{token}}$-Len通常性能更优。这一现象可能源于不同主方向下表征演化模式的差异：在layer主方向中，隐藏状态主要刻画信息在网络深度上的逐层变换，其幅值变化相对平滑，而方向上的偏折更能反映语义空间中的结构调整，因此转折角度（Ang）对异常变化更为敏感；相对地，在token主方向中，链式表征沿生成序列展开，不同token之间的表示差异往往表现为更明显的幅值变化，从而使得链长度（Len）能够更直接地刻画生成过程中潜在的语义偏移。该结果表明，不同几何指标的选取策略对性能存在一定影响，这也进一步说明几何指标选取并非无关紧要，而是链式表征建模中的一个重要组成部分。
 \end{itemize}
-
-为更直观地分析不同幻觉检测分数对真实样本与幻觉样本的区分能力，除上述结果外，本文额外在两个数据集上，将测试集样本按照参考标签划分为“真实回答”与“幻觉回答”两组，并分别统计各方法在两组样本上的分数分布，如图~\ref{fig:distribution_mgsm}、图~\ref{fig:distribution_csqa}所示。具体地，本文对每种方法得到的样本级分数采用核密度估计（Kernel Density Estimation, KDE）进行平滑，从而绘制概率密度曲线。图中横轴表示对应方法的检测分数，纵轴表示该分数的概率密度，蓝色曲线与红色曲线分别对应两类样本；两条曲线的相对位置、峰值偏移程度以及重叠面积，能够直观反映该方法对两类样本的可分性。一般而言，若两组样本的分布峰值分离更明显、重叠区域更小，则说明该分数更能够刻画真实与幻觉输出之间的内部表征差异，因而具备更强的判别能力。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{figures/content/coe_distribution_mgsm_Llama-3-8B-Instruct_en.pdf}
-    \caption{ATScore和对比方法在GSM8K（MGSM）上的幻觉分数分布}\label{fig:distribution_mgsm}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{figures/content/coe_distribution_commonsenseqa_Llama-3-8B-Instruct_en.pdf}
-    \caption{ATScore和对比方法在CommonsenseQA上的幻觉分数分布}\label{fig:distribution_csqa}
-\end{figure}
-
-从图中可以看出，ATScore系列方法整体上较黑盒统计量方法与传统白盒表征统计方法展现出更清晰的双峰分离趋势，其中ATScore$_{\mathrm{token}}$-Len在两个数据集上表现尤为突出：其真实回答与幻觉回答两组样本的密度峰位置偏移更明显，重叠区域相对更小，说明该方法能够更稳定地捕捉幻觉生成过程中内部表征轨迹的异常变化。这一现象与主实验结果是一致的，即ATScore系列在多数数据集及指标设定下取得最优，而ATScore$_{\mathrm{token}}$-Len则是整体表现最稳定、最优次数最多的变体。综合来看，这些分布图从可视化角度进一步验证了本文方法的有效性，也说明ATScore$_{\mathrm{token}}$-Len能够更充分地利用内部表征中的多方向结构信息，是本文最具代表性的主推方法。
 
 从机制层面看，本文方法之所以能够取得较好的检测效果，主要源于其对大语言模型内部表征动态结构的更充分利用。传统黑盒方法主要依赖输出层概率或序列级似然信息，这类信号虽然计算简单，但往往只能反映最终输出的不确定性，难以深入揭示模型内部生成机制。幻觉的产生并不一定只在最终输出阶段才显现，其对应的异常模式往往会提前体现在隐藏状态的演化过程中。
 

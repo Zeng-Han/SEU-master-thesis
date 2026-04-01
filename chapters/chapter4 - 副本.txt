@@ -52,7 +52,7 @@ f(M,X,R,Y,H)\rightarrow \{0,1\},
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{figures/content/第四章方法总览.png}
+    \includegraphics[width=\textwidth]{figures/content/第三章方法总览.png}
     \caption{SKID算法框架图}\label{fig:skid_overview}
 \end{figure}
 
@@ -196,55 +196,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 \mathbf{F}_{\mathrm{test}}\in\mathbb{R}^{N_{\mathrm{test}}\times k};
 \end{equation}
 
-最后将其输入训练阶段得到的GAM分类器，输出对应样本的幻觉预测结果与幻觉概率分数。由此，本文完成了从高维稀疏知识冲突表征到最终RAG幻觉检测指标的构建。我们将以上SKID算法的步骤清晰地总结于算法~\ref{alg:skid_train}及算法~\ref{alg:skid_test}中。
-
-\begin{algorithm}[htbp]
-\caption{SKID算法（训练阶段）}
-\label{alg:skid_train}
-\begin{algorithmic}[1]
-\Require 训练集$\mathcal{D}_{\mathrm{train}}=\{(X^{(u)},R^{(u)},Y^{(u)},c^{(u)})\}_{u=1}^{N}$；大语言模型$M$；指定层索引$l$；稀疏自编码器$f_{\mathrm{SAE}}(\cdot)$；保留特征维数$k$
-\Ensure 关键特征集合$\mathcal{K}$；训练好的GAM分类器$\mathcal{G}$
-
-\For{$u=1,2,\dots,N$}
-    \State 提取样本$(X^{(u)},R^{(u)},Y^{(u)})$中输出序列$Y^{(u)}=\{y^{(u)}_1,\dots,y^{(u)}_{m_u}\}$在第$l$层的隐藏状态$\mathbf{h}^{(l,u)}_i$
-    \State $\mathbf{z}^{(u)}_i \gets f_{\mathrm{SAE}}(\mathbf{h}^{(l,u)}_i),\quad i=1,2,\dots,m_u$
-    \State 构造稀疏特征矩阵$\mathbf{Z}^{(u)}=[(\mathbf{z}^{(u)}_1)^\top;(\mathbf{z}^{(u)}_2)^\top;\dots;(\mathbf{z}^{(u)}_{m_u})^\top]\in\mathbb{R}^{m_u\times D}$
-    \State 依据$y^{(u)}_i\notin R^{(u)}$保留未被检索内容覆盖的输出token，得到过滤后的稀疏特征矩阵$\widetilde{\mathbf{Z}}^{(u)}\in\mathbb{R}^{m'_u\times D}$
-    \State 逐维最大池化：$\mathbf{s}^{(u)}\gets \max_{1\leq i\leq m'_u}\widetilde{\mathbf{z}}^{(u)}_i\in\mathbb{R}^{D}$
-\EndFor
-
-\State 构造训练特征矩阵$\mathbf{S}_{\mathrm{train}}=[(\mathbf{s}^{(1)})^\top;(\mathbf{s}^{(2)})^\top;\dots;(\mathbf{s}^{(N)})^\top]\in\mathbb{R}^{N\times D}$
-
-\For{$j=1,2,\dots,D$}
-    \State 计算第$j$维特征与幻觉标签之间的互信息$I(S_j;C)$
-\EndFor
-
-\State 选取互信息最高的前$k$个维度，构成关键特征集合$\mathcal{K}=\{j_1,j_2,\dots,j_k\}$
-\State 得到降维后的训练特征矩阵$\mathbf{S}^{(\mathcal{K})}_{\mathrm{train}}\in\mathbb{R}^{N\times k}$
-\State 用$\mathbf{S}^{(\mathcal{K})}_{\mathrm{train}}$及标签$\{c^{(u)}\}_{u=1}^{N}$训练GAM分类器$\mathcal{G}$
-
-\State \Return $\mathcal{K},\mathcal{G}$
-\end{algorithmic}
-\end{algorithm}
-
-\begin{algorithm}[htbp]
-\caption{SKID算法（测试阶段）}
-\label{alg:skid_test}
-\begin{algorithmic}[1]
-\Require 测试样本$(X,R,Y)$；大语言模型$M$；指定层索引$l$；稀疏自编码器$f_{\mathrm{SAE}}(\cdot)$；关键特征集合$\mathcal{K}$；训练好的GAM分类器$\mathcal{G}$
-\Ensure 幻觉预测标签$\hat{c}\in\{0,1\}$
-
-\State 提取输出序列$Y=\{y_1,y_2,\dots,y_m\}$在第$l$层的隐藏状态$\mathbf{h}^{(l)}_i$
-\State $\mathbf{z}_i \gets f_{\mathrm{SAE}}(\mathbf{h}^{(l)}_i),\quad i=1,2,\dots,m$
-\State 构造稀疏特征矩阵$\mathbf{Z}=[\mathbf{z}_1^\top;\mathbf{z}_2^\top;\dots;\mathbf{z}_m^\top]\in\mathbb{R}^{m\times D}$
-\State 依据$y_i\notin R$保留未被检索内容覆盖的输出token，得到过滤后的稀疏特征矩阵$\widetilde{\mathbf{Z}}\in\mathbb{R}^{m'\times D}$
-\State 逐维最大池化：$\mathbf{s}\gets \max_{1\leq i\leq m'}\widetilde{\mathbf{z}}_i\in\mathbb{R}^{D}$
-\State 按关键特征集合$\mathcal{K}$抽取判别特征，得到$\mathbf{s}^{(\mathcal{K})}\in\mathbb{R}^{k}$
-\State $\hat{c}\gets \mathcal{G}(\mathbf{s}^{(\mathcal{K})})$
-
-\State \Return $\hat{c}$
-\end{algorithmic}
-\end{algorithm}
+最后将其输入训练阶段得到的GAM分类器，输出对应样本的幻觉预测结果与幻觉概率分数。由此，本文完成了从高维稀疏知识冲突表征到最终RAG幻觉检测指标的构建。
 
 \section{实验分析}
 
@@ -387,7 +339,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 
 \subsubsection{更多评价指标与数据集}
 
-如~\ref{subsec:skid_experiment_settings}中所述，除需在设定阈值下评价分类器性能的ACC、F1评价指标外；还有不依赖特定阈值，通过滑动阈值更全面地评价分类器综合表现的AUROC、FPR95和AUPR评价指标。同时，我们也在额外两个数据集AggreFact和TofuEval上衡量了SKID我们方法的性能。表~\ref{tab:skid_more_metrics_and_datasets}展示了SKID方法与对比方法在更多评价指标和数据集上的性能。此外，为更直观地分析不同算法在RAG幻觉检测任务中的区分能力，本文额外在两个数据集上，将测试集样本按照参考标签划分为“真实回答”与“幻觉回答”两组，并分别统计各方法在两组样本上的分数分布，如图~\ref{fig:distribution_aggrefact_dolly}所示，绘制方法与~\ref{subsec:result_analysis}中所述保持一致。
+如~\ref{subsec:skid_experiment_settings}中所述，除需在设定阈值下评价分类器性能的ACC、F1评价指标外；还有不依赖特定阈值，通过滑动阈值更全面地评价分类器综合表现的AUROC、FPR95和AUPR评价指标。同时，我们也在额外两个数据集AggreFact和TofuEval上衡量了SKID我们方法的性能。表~\ref{tab:skid_more_metrics_and_datasets}展示了SKID方法与对比方法在更多评价指标和数据集上的性能。
 
 \begin{table}[htbp]
   \centering
@@ -412,14 +364,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \end{autofittabular}
 \end{table}
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\textwidth]{figures/content/hallucination_score_distribution_2x2_wide.pdf}
-  \caption{SKID与RAGLens在AggreFact与Dolly数据集上的幻觉分数分布}
-  \label{fig:distribution_aggrefact_dolly}
-\end{figure}
-
-从表~\ref{tab:skid_more_metrics_and_datasets}可以看出，在引入更多评价指标与数据集后，SKID方法依然保持了稳定且优越的整体性能。首先，在RAGTruth与Dolly两个数据集上，SKID在AUROC、AUPR以及ACC、F1等多个指标上均优于RAGLens，尤其在FPR95指标上取得了明显下降，表明在保证高召回率的同时，误报率得到了有效控制，从而在阈值无关的检测能力上进一步提升。其次，在额外引入的AggreFact与TofuEval数据集上，SKID同样在大多数指标上取得最优结果，特别是在AUROC与AUPR等综合性指标上表现突出，说明本文方法在不同数据分布与任务设置下均具有良好的泛化能力。尽管在FPR95指标下的个别情况下未取得最优，但整体趋势依然表明SKID在综合性能上优于现有方法。从图~\ref{fig:distribution_aggrefact_dolly}可以看出，在所示数据集上，SKID方法在“真实回答”样本上的分数分布明显偏向于较低的分数区间，而在“幻觉回答”样本上的分数分布则明显偏向于较高的分数区间，显示出较好的区分能力，因此在分类任务中获得了更高的AUROC得分。相比之下，RAGLens方法在两类样本上的分数分布重叠区域较多，占据总数据量的比例较大，说明其在所示数据集上的判别能力相对较弱。综上，实验结果进一步验证了本文方法在多指标、多数据集场景下的稳健性与有效性，亦从可视化的角度验证了SKID在不同数据集上的稳定优越性能，能够更全面地刻画RAG幻觉检测任务中的判别能力。
+从表~\ref{tab:skid_more_metrics_and_datasets}可以看出，在引入更多评价指标与数据集后，SKID方法依然保持了稳定且优越的整体性能。首先，在RAGTruth与Dolly两个数据集上，SKID在AUROC、AUPR以及ACC、F1等多个指标上均优于RAGLens，尤其在FPR95指标上取得了明显下降，表明在保证高召回率的同时，误报率得到了有效控制，从而在阈值无关的检测能力上进一步提升。其次，在额外引入的AggreFact与TofuEval数据集上，SKID同样在大多数指标上取得最优结果，特别是在AUROC与AUPR等综合性指标上表现突出，说明本文方法在不同数据分布与任务设置下均具有良好的泛化能力。尽管在FPR95指标下的个别情况下未取得最优，但整体趋势依然表明SKID在综合性能上优于现有方法。综上，实验结果进一步验证了本文方法在多指标、多数据集场景下的稳健性与有效性，能够更全面地刻画RAG幻觉检测任务中的判别能力。
 
 \subsubsection{数据集变体}
 
@@ -453,15 +398,15 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 
 \subsubsection{$k$值}
 
-在~\ref{subsec:skid_hallucination_score_definition}中，我们讨论了幻觉指标构建方法，其中包括从高维稀疏特征中选取其中互信息最高的$k$个维度构成关键特征集合。在本实验中，$k$值的选取与SKID算法的性能存在密切的关系。SKID算法与对比算法在RAGTruth的两个子数据集上的AUROC性能随$k$值变化的趋势如图~\ref{fig:skid_k}所示。
+在~\ref{subsec:skid_hallucination_score_definition}中，我们讨论了幻觉指标构建方法，其中包括从高维稀疏特征中选取其中互信息最高的$k$个维度构成关键特征集合。在本实验中，$k$值的选取与SKID算法的性能存在密切的关系。实验结果表明，在不同$k$值设定下，SKID算法在RAGTruth数据集上的性能会随关键特征维度选择而发生明显变化。
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{figures/content/ragtruth_auroc_subplots_v2.pdf}
-    \caption{SKID与对比算法在RAGTruth数据集上的AUROC性能随$k$值变化图}\label{fig:skid_k}
-\end{figure}
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=\textwidth]{figures/content/k.png}
+%     \caption{ATScore算法框架图}\label{fig:skid_k}
+% \end{figure}
 
-实验结果表明，在不同$k$值设定下，SKID算法在RAGTruth数据集上的性能会随关键特征维度选择而发生明显变化。随着互信息筛选特征维度数$k$的增大，方法在两个数据集上的AUROC整体均呈上升趋势。这与我们的直观感受一致：保留更多高判别性稀疏特征有助于提升RAG幻觉检测性能。过小的$k$值会限制模型对关键知识冲突信号的表征能力，而适当增大$k$能够引入更丰富的判别信息，从而提高检测效果。与此同时，SKID在大多数$k$取值下均优于RAGLens，且这种优势在较大$k$时更加明显，表明所提出的检索知识过滤与稀疏特征建模机制能够更充分地挖掘高维判别特征中的有效信息。总体而言，该实验说明方法对$k$具有一定敏感性，但在合理范围内呈现出较稳定的“随$k$增大而持续受益”的趋势，验证了互信息筛选特征维度在SKID中的重要作用。
+k越大，效果越好。
 
 \subsubsection{SAE编码模块与知识冲突消解模块}
 
