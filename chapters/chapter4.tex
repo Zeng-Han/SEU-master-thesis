@@ -1,11 +1,11 @@
 \chapter{基于检索知识冲突消解的幻觉检测方法}\label{chp:chapter4}
 
-% 第二项研究内容面向RAG幻觉检测任务。针对现有RAG幻觉检测方法对外部检索知识信号利用不充分、内外知识冲突难以简单有效刻画，以及检测信号可解释性不足等问题，本文拟研究一种\emph{基于检索知识冲突消解的幻觉检测方法}。其具体贡献如下：
+% 第二项研究内容针对现有RAG幻觉检测方法对外部检索知识信号利用不充分的问题，本文拟从大语言模型内部表征中的知识冲突与消解的角度出发，研究一种\emph{基于检索知识冲突消解的幻觉检测方法}。其具体贡献如下：
 
 % \begin{itemize}
 %     \item 提出一种基于检索知识冲突消解的RAG幻觉检测方法SKID（Sparse Knowledge Inconsistency Detector）。针对现有方法对外部检索知识信号利用不充分的问题，提出在SAE高维度参数空间对外部知识和内部知识进行明确定义和消解，从而构建更准确、稳定、符合设定的RAG幻觉检测信号。
 %     \item 通过引入可解释的稀疏特征表征，进一步提升RAG幻觉检测方法的可解释性，使得检测不仅能够准确反映生成内容与外部知识之间的冲突程度，还能够以清晰的自然语言表达的方式解释“模型为何被判定为产生了幻觉”，从而增强方法在实际应用中的易用性和用户信任度。
-%     \item 在多个RAG数据集上进行系统性评估，并针对超参数、算法变体进行多种消融实验，验证所提出方法在准确检测RAG幻觉、刻画内外知识冲突以及提升检测可解释性方面的有效性。与现有RAG幻觉检测和通用幻觉检测方法进行对比分析，展示其在提升检测性能和可解释性方面的优势。
+%     \item 在多个RAG数据集上进行系统性评估，并针对超参数、算法变体进行多种消融实验，验证所提出方法在准确检测RAG幻觉、刻画内外知识冲突以及提升检测可解释性方面的有效性。与现有RAG幻觉检测和幻觉检测方法进行对比分析，展示其在提升检测性能和可解释性方面的优势。
 % \end{itemize}
 
 检索增强生成（Retrieval-Augmented Generation，RAG）通过引入外部检索文档，为大语言模型生成过程提供额外知识支撑，在一定程度上缓解了封闭参数知识带来的事实性错误问题。然而，RAG并未从根本上消除幻觉现象。当检索内容与模型内部参数知识存在偏差、冲突或对齐不充分时，模型仍可能生成与检索证据不一致、与事实不符甚至凭空编造的内容。现有RAG幻觉检测方法虽然已经关注到检索文档在判别中的作用，但总体上仍存在两类主要问题：其一是\emph{对外部检索知识信号的利用仍不充分}，难以对“模型内部知识—外部检索知识”之间的冲突关系进行简洁而有效的刻画；同时，许多方法给出的检测分数\emph{缺乏清晰的语义-幻觉对应关系}，导致其可解释性不足，难以回答“模型为何被判定为产生幻觉”这一关键问题。
@@ -16,31 +16,12 @@
 
 检索增强生成（Retrieval-Augmented Generation, RAG）是一类通过引入外部知识以辅助大语言模型生成的典型框架。与仅依赖参数化知识的传统生成方式不同，RAG在接收到用户输入后，会首先从外部知识库中检索与当前问题相关的参考文档，再将检索结果与用户输入共同提供给大语言模型，从而生成最终输出。该过程通常可划分为“检索—增强—生成”三个阶段：首先，检索器根据用户输入从知识库中召回若干相关文档；随后，将检索得到的文档与原始输入按照预定义模板进行拼接或组织，形成增强后的上下文；最后，生成模型基于该增强上下文生成响应。
 
-形式化地，设用户输入文本的token序列为$X=\{x_1,x_2,\ldots,x_n\}$，其中$n$表示输入序列长度。给定外部知识库$\mathcal{D}$，检索模块根据输入$X$返回$N$个与之相关的文档，记为$R=\{D_1,D_2,\ldots,D_N\}$，其中$D_j$表示第$j$个检索文档。进一步地，将输入$X$与检索结果$R$进行组合，得到增强后的模型条件输入
-
-\begin{equation}
-\widetilde{X}=\Phi(X,R),
-\end{equation}
-
-其中$\Phi(\cdot)$表示用于组织输入问题与检索文档的提示模板或上下文构造函数。在此基础上，生成模型$M$输出响应文本token序列$Y=\{y_1,y_2,\ldots,y_m\}$，其中$m$表示输出序列长度，则RAG场景下的生成过程可概括为
-
+形式化地，设用户输入文本的词元（token）序列为$X=\{x_1,x_2,\ldots,x_n\}$，其中$n$表示输入序列长度。给定外部知识库$\mathcal{D}$，检索模块根据输入$X$返回$N$个与之相关的文档，记为$R=\{D_1,D_2,\ldots,D_N\}$，其中$D_j$表示第$j$个检索文档。进一步地，将输入$X$与检索结果$R$进行组合，得到增强后的模型条件输入$\widetilde{X}=\Phi(X,R)$，其中$\Phi(\cdot)$表示用于组织输入问题与检索文档的提示模板或上下文构造函数。在此基础上，生成模型$M$输出响应文本token序列$Y=\{y_1,y_2,\ldots,y_m\}$，其中$m$表示输出序列长度，则RAG场景下的生成过程可概括为
 \begin{equation}
 Y=M(\widetilde{X})=M(\Phi(X,R)).
 \end{equation}
 
-在此基础上，RAG幻觉检测任务的目标是判断模型输出$Y$是否存在幻觉，即判断其内容是否与外部检索知识$R$保持一致。与一般生成场景相比，RAG模型的输出不仅应满足任务语义上的正确性，还应尽可能受到检索证据的支持。因此，RAG幻觉检测可以形式化为如下二分类问题：
-
-\begin{equation}
-f(M,X,R,Y)\rightarrow \{0,1\},
-\end{equation}
-
-其中$f$表示RAG幻觉检测模型。当输出为1时，表示生成结果中存在幻觉内容；当输出为0时，表示生成结果中不存在幻觉内容。若在白盒设定下，还可进一步利用模型在生成$Y$过程中产生的内部隐藏状态作为额外输入，从而将判别函数写为
-
-\begin{equation}
-f(M,X,R,Y,H)\rightarrow \{0,1\},
-\end{equation}
-
-其中$H$表示模型在生成过程中得到的内部表征集合。由于这些内部表征刻画了模型在不同层、不同位置上的中间语义状态，因此能够为RAG幻觉检测提供比最终文本更丰富的判别信息。
+在此基础上，RAG幻觉检测任务的目标是判断模型输出$Y$是否存在幻觉，即判断其内容是否与外部检索知识$R$保持一致。与一般生成场景相比，RAG模型的输出不仅应满足任务语义上的正确性，还应尽可能受到检索证据的支持。因此，RAG幻觉检测可以形式化为二分类问题$f(M,X,R,Y)\rightarrow \{0,1\}$，其中$f$表示RAG幻觉检测模型。当输出为1时，表示生成结果中存在幻觉内容；当输出为0时，表示生成结果中不存在幻觉内容。若在白盒设定下，还可进一步利用模型在生成$Y$过程中产生的内部隐藏状态作为额外输入，从而将判别函数写为$f(M,X,R,Y,H)\rightarrow \{0,1\}$，其中$H$表示模型在生成过程中得到的内部表征集合。由于这些内部表征刻画了模型在不同层、不同位置上的中间语义状态，因此能够为RAG幻觉检测提供比最终文本更丰富的判别信息。
 
 需要指出的是，RAG场景下“幻觉”的含义与一般大模型幻觉检测问题存在一定区别。在一般幻觉检测任务中，通常只关注模型输出$Y$是否与标准答案在语义上保持一致，即更强调输出结果本身的事实正确性。然而，在RAG场景中，模型生成建立在外部检索知识的基础之上，因此除了考察输出与标准答案是否一致之外，还需要进一步关注输出内容是否能够被检索证据$R$，亦即外部知识所支持。换言之，RAG幻觉不仅表现为“回答错误”，还可能表现为“回答虽然看似合理，但其关键信息无法从检索文档中得到支持”，或者“输出内容与外部输入知识发生冲突”。
 
@@ -64,28 +45,14 @@ f(M,X,R,Y,H)\rightarrow \{0,1\},
 % 从大模型生成过程的某层提取output token的表征，通过稀疏自编码器SAE转为高维稀疏表征。
 % 高维稀疏表征有什么用，为什么要做这一步。
 
-为刻画大语言模型在生成过程中的内部知识表征，本文首先从模型生成输出序列时的隐藏状态中提取输出token的中间层表示，并进一步借助稀疏自编码器（Sparse Autoencoder，SAE）将其映射到高维稀疏特征空间中。具体而言，设大语言模型为$M$，对于输入样本，模型生成输出序列$Y=\{y_1,y_2,\dots,y_m\}$。记第$l$层对第$i$个输出token $y_i$的隐藏表示为$\mathbf{h}_i^{(l)}\in\mathbb{R}^{d}$，其中$d$为原始隐空间维度。对于每个输出token，本文选取指定层的隐藏表示作为其内部语义状态的表征，并将其输入预训练好的SAE编码器，得到对应的高维稀疏表征
-
+为刻画大语言模型在生成过程中的内部知识表征，本文首先从模型生成输出序列时的隐藏状态中提取输出token的中间层表示，并进一步借助稀疏自编码器（Sparse Autoencoder，SAE）将其映射到高维稀疏特征空间中。具体而言，设大语言模型为$M$，对于输入样本，模型生成输出序列$Y=\{y_1,y_2,\dots,y_m\}$。记第$l$层对第$i$个输出token $y_i$的隐藏表示为$\mathbf{h}_i^{(l)}\in\mathbb{R}^{d}$，其中$d$为原始隐空间维度。对于每个输出token，本文选取指定层的隐藏表示作为其内部语义状态的表征，并将其输入预训练好的SAE编码器，得到对应的高维稀疏表征$\mathbf{z}_i=f_{\mathrm{SAE}}\!\left(\mathbf{h}_i^{(l)}\right)\in\mathbb{R}^{D}$，其中$D$为SAE的特征维度，满足$D\gg d$，且$\mathbf{z}_i$具有显著稀疏性，即仅有少量维度被激活。对整个输出序列进行处理后，可得到该样本对应的稀疏特征矩阵
 \begin{equation}
-\mathbf{z}_i=f_{\mathrm{SAE}}\!\left(\mathbf{h}_i^{(l)}\right)\in\mathbb{R}^{D},
-\end{equation}
-
-其中$D$为SAE的特征维度，满足$D\gg d$，且$\mathbf{z}_i$具有显著稀疏性，即仅有少量维度被激活。对整个输出序列进行处理后，可得到该样本对应的稀疏特征矩阵
-
-\begin{equation}
-\mathbf{Z}=
-\begin{bmatrix}
-\mathbf{z}_1^{\top}\\
-\mathbf{z}_2^{\top}\\
-\vdots\\
-\mathbf{z}_m^{\top}
-\end{bmatrix}
+\mathbf{Z}=\left [\mathbf{z}_1, \mathbf{z}_2, \cdots, \mathbf{z}_m\right ]^{\top}
 \in\mathbb{R}^{m\times D},
 \end{equation}
-
 其中第$i$行对应第$i$个输出token的稀疏语义特征表示。
 
-引入高维稀疏表征的核心目的，在于将原始隐藏状态中高度纠缠的语义信息解耦为更具可解释性的特征单元。原始隐表示通常呈现明显的多义性与混合性，即单个神经元或局部子空间往往同时承载多种语义因素，难以直接对应某一明确知识概念；而SAE通过过完备表示与稀疏约束，能够将这种“多义”表征转化为更接近“单义”的稀疏特征激活，使不同维度更倾向于响应相对独立、可解释的语义模式【】。从方法设计上看，这样的特征表示有两方面优势：其一是便于后续对特征空间的互信息筛选和广义加性模型训练，因稀疏式特征便于机器学习建模；其二是有助于提升模型可解释性，可通过分析得知高维空间的具体含义，能够建模何种幻觉，实现从“判定幻觉”到“解释为何被判定为幻觉”的体验提升。
+引入高维稀疏表征的核心目的，在于将原始隐藏状态中高度纠缠的语义信息解耦为更具可解释性的特征单元。原始隐表示通常呈现明显的多义性与混合性，即单个神经元或局部子空间往往同时承载多种语义因素，难以直接对应某一明确知识概念；而SAE通过过完备表示与稀疏约束，能够将这种“多义”表征转化为更接近“单义”的稀疏特征激活，使不同维度更倾向于响应相对独立、可解释的语义模式\cite{shu2025survey,bricken2023towards,huben2024sparse,xiong2025toward}。从方法设计上看，这样的特征表示有两方面优势：其一是便于后续对特征空间的互信息筛选和广义加性模型训练，因稀疏式特征便于机器学习建模；其二是有助于提升模型可解释性，可通过分析得知高维空间的具体含义，能够建模何种幻觉，实现从“判定幻觉”到“解释为何被判定为幻觉”的体验提升。
 
 \subsection{知识冲突消解}\label{subsec:knowledge_conflict_resolution}
 
@@ -94,7 +61,6 @@ f(M,X,R,Y,H)\rightarrow \{0,1\},
 在获得输出序列的稀疏特征表示之后，本文进一步考虑如何从中分离出更能反映模型内部知识偏差的判别信号。对于RAG任务而言，模型最终生成的输出通常同时混合了两类知识来源：一类是由外部检索文档直接提供或显式支持的知识，另一类则是模型依赖其参数内部所存储知识进行补全、推断甚至臆造时所引入的知识。基于此，本文设计知识冲突消解步骤，在token级别对输出内容进行筛选，以尽可能除去受外部检索知识直接支撑的生成成分，仅保留更可能体现模型内部知识主导作用的部分。
 
 具体而言，设模型输出序列为$Y=\{y_1,y_2,\dots,y_m\}$，检索到的外部知识文本拼接后构成检索内容序列$R=\{r_1,r_2,\dots,r_n\}$。本文首先在token级别判断输出token是否在检索内容中出现。对于第$i$个输出token $y_i$，定义其对应的指示变量为
-
 \begin{equation}
 \delta_i=
 \begin{cases}
@@ -102,26 +68,17 @@ f(M,X,R,Y,H)\rightarrow \{0,1\},
 1, & y_i\notin R,
 \end{cases}
 \end{equation}
-
 其中$\delta_i=0$表示该token已经在检索内容中出现，可视为受到外部知识的直接支持；$\delta_i=1$表示该token未在检索内容中出现，更可能反映模型在生成过程中调用内部参数知识后产生的补充或偏移。基于该指示变量，本文对前述token级稀疏表征$\mathbf{z}_i\in\mathbb{R}^{D}$进行筛选，仅保留未在检索内容中出现的输出token所对应的特征，即构造过滤后的稀疏表征
-
 \begin{equation}
 \widetilde{\mathbf{Z}}=\mathbf{Z}\left[\mathbb{I}\left(\delta_i=1\right),:\right]\in\mathbb{R}^{m^\prime\times D},\quad i=1,2,\dots,m.
 \end{equation}
-
 其中$\mathbb{I}(\cdot)$为指示函数，表示对$\delta_i=1$的行予以保留，对于$\delta_i=0$的行予以舍弃。于是，对于单个样本，可得到经过知识冲突消解后的token级特征集合$\{\tilde{\mathbf{z}}_1,\dots,\tilde{\mathbf{z}}_{m^\prime}\}$。
 
 在此基础上，为进一步从token级表示汇聚为样本级判别向量，本文沿token维度对过滤后的稀疏特征执行最大池化操作，从而提取每个稀疏维度在当前样本中最显著的激活强度。设单个样本过滤后的稀疏特征矩阵为$\widetilde{\mathbf{Z}}\in\mathbb{R}^{m^\prime\times D}$，则其对应的样本级冲突表征向量定义为
-
 \begin{equation}
 \mathbf{s}=\max_{1\leq i\leq m^\prime}\tilde{\mathbf{z}}_i\in\mathbb{R}^{D},
 \end{equation}
-
-其中max操作逐维进行，即
-
-\begin{equation}
-s_j=\max_{1\leq i\leq m^\prime}\tilde{z}_{i,j},\quad j=1,2,\dots,D.
-\end{equation}
+其中max操作逐维进行，即$s_j=\max_{1\leq i\leq m^\prime}\tilde{z}_{i,j},\quad j=1,2,\dots,D$。
 
 之所以在token维度采用逐维最大池化，而非均值池化或求和聚合，是因为SAE得到的表征通常经过ReLU等非线性激活后呈现出显著的稀疏性，其大多数维度取值为$0$，而非零正值则表示相应语义特征在当前token处被激活。对于同一输出序列而言，某一稀疏特征是否在任意位置被显著触发，往往比其在所有token上的平均响应强度更具有判别意义。逐维最大池化能够有效保留每个特征在样本范围内最强的激活信号，避免池化操作被稀释，从而更有利于后续模型捕捉与幻觉相关的关键知识冲突模式。
 
@@ -135,26 +92,16 @@ s_j=\max_{1\leq i\leq m^\prime}\tilde{z}_{i,j},\quad j=1,2,\dots,D.
 
 在完成知识冲突消解后，本文已经为每个样本获得了样本级稀疏冲突表征$\mathbf{s}\in\mathbb{R}^{D}$。然而，并非所有稀疏特征维度都与RAG幻觉判别具有同等关联：部分维度可能主要反映一般性的语言模式或无关语义因素，另一些维度则更可能直接刻画模型内部知识与外部检索知识之间的冲突强度。因此，本文进一步在特征维度上进行判别性筛选，从中选取与幻觉标签最相关的关键稀疏特征，并基于这些特征构建最终的幻觉检测指标。
 
-具体而言，设训练集共有$N$个样本，经过前述步骤后可得到样本级特征矩阵
-
-\begin{equation}
-\mathbf{S}_{\mathrm{train}}\in\mathbb{R}^{N\times D},
-\end{equation}
-
-其中第$i$个样本的幻觉标签记为$c_i\in\{0,1\}$，$c_i=1$表示该样本存在幻觉，$c_i=0$表示该样本不存在幻觉。对于第$j$个稀疏特征维度，记其在全部训练样本上的取值为随机变量$S_j$，对应的标签随机变量记为$C$，则本文计算该维度与幻觉标签之间的互信息
-
+具体而言，设训练集共有$N$个样本，经过前述步骤后可得到样本级特征矩阵$\mathbf{S}_{\mathrm{train}}\in\mathbb{R}^{N\times D}$，其中第$i$个样本的幻觉标签记为$c_i\in\{0,1\}$，$c_i=1$表示该样本存在幻觉，$c_i=0$表示该样本不存在幻觉。对于第$j$个稀疏特征维度，记其在全部训练样本上的取值为随机变量$S_j$，对应的标签随机变量记为$C$，则本文计算该维度与幻觉标签之间的互信息
 \begin{equation}
 I(S_j;C),\quad j=1,2,\dots,D.
 \end{equation}
 
 互信息可用于度量某一特征维度与标签变量之间的统计相关程度。与仅刻画线性相关性的指标相比，互信息能够更一般地反映特征对标签判别所提供的信息量，因此适合作为高维稀疏特征筛选的依据。基于此，本文按照$I(S_j;C)$从高到低对全部$D$个特征维度进行排序，并选取其中互信息最高的$k$个维度构成关键特征集合
-
 \begin{equation}
 \mathcal{K}=\{j_1,j_2,\dots,j_k\},\quad |\mathcal{K}|=k.
 \end{equation}
-
 据此，可从原始特征矩阵$\mathbf{S}_{\mathrm{train}}$中抽取对应的低维判别特征，得到
-
 \begin{equation}
 \mathbf{F}_{\mathrm{train}}=\mathbf{S}_{\mathrm{train}}[:,\mathcal{K}]\in\mathbb{R}^{N\times k}.
 \end{equation}
@@ -162,17 +109,13 @@ I(S_j;C),\quad j=1,2,\dots,D.
 上述过程的核心作用，在于从高维稀疏冲突表征中进一步提炼出与幻觉最相关的少量特征维度。一方面，SAE诱导的特征空间通常具有较高维数，若直接使用全部维度进行建模，容易引入冗余信息与噪声信号，削弱检测器对关键冲突模式的敏感性；另一方面，互信息筛选能够保留那些对幻觉判别最具信息贡献的稀疏维度，使最终检测指标更加集中地反映“哪些内部知识特征的激活与幻觉出现最为相关”。因此，这一步不仅实现了特征降维，也进一步增强了检测信号的判别性与可解释性。
 
 在获得$\mathbf{F}_{\mathrm{train}}$之后，本文采用广义可加模型（Generalized Additive Model，GAM）作为最终的幻觉检测器，对幻觉标签进行拟合。GAM的基本思想是将模型输出表示为若干单变量或低阶交互项的可加和，从而在保持一定非线性拟合能力的同时，维持较好的可解释性。对于本文任务，设输入样本的$k$维特征向量为$\mathbf{f}=(f_1,f_2,\dots,f_k)$，则分类器的判别函数可表示为
-
 \begin{equation}
 g(\mathbf{f})=\beta_0+\sum_{t=1}^{k}\alpha_t(f_t),
 \end{equation}
-
 其中$\beta_0$为偏置项，$\alpha_t(\cdot)$表示第$t$个特征维度对应的单变量响应函数。在二分类设置下，模型输出样本存在幻觉的概率为
-
 \begin{equation}
 P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 \end{equation}
-
 其中$\sigma(\cdot)$表示Sigmoid函数。
 
 本文选择简单GAM而非更复杂的黑盒分类器，主要出于轻量化需要考虑。作为需要训练的模型，经过前述知识冲突消解与互信息筛选后，输入特征已经被压缩为一组参数量较少且具有明确判别意义的关键稀疏维度，此时使用结构简单的可加模型即可较好地拟合幻觉与特征之间的关系，无需额外引入过强的模型复杂度。
@@ -180,7 +123,6 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 ~\newline
 
 综上，本文结合SAE稀疏特征和内外知识冲突消解，构建面向RAG幻觉检测的最终指标，其生成流程如下：首先在训练集上取大模型某层输出隐藏表征，通过SAE模型升维为高维稀疏特征。随后，从输出中筛去在检索知识中出现过的token，以消解知识冲突。其次，计算每个SAE特征维度与幻觉标签之间的互信息，选取最具判别力的$k$个关键维度。最后以这些关键维度构成的$N\times k$特征矩阵为输入，训练GAM分类器拟合幻觉标签，从而得到从稀疏冲突特征到幻觉概率的映射关系。其流程中数据形状的变化如下所示：
-
 \begin{equation}
   \mathbf{h}^{(l)}\in\mathbb{R}^{m\times d} \xrightarrow[\text{编码}] {\text{SAE}}
   \mathbf{Z}\in\mathbb{R}^{m\times D} \xrightarrow[\text{冲突消解}]{\text{检索知识}} 
@@ -190,13 +132,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \mathbb{R}.
 \end{equation}
 
-对于测试阶段，本方法遵循与训练阶段完全一致的处理流程：首先从模型输出中提取稀疏表征，并经由知识冲突消解得到样本级特征向量；然后仅保留训练阶段确定的关键维度集合$\mathcal{K}$，构造测试特征矩阵
-
-\begin{equation}
-\mathbf{F}_{\mathrm{test}}\in\mathbb{R}^{N_{\mathrm{test}}\times k};
-\end{equation}
-
-最后将其输入训练阶段得到的GAM分类器，输出对应样本的幻觉预测结果与幻觉概率分数。由此，本文完成了从高维稀疏知识冲突表征到最终RAG幻觉检测指标的构建。我们将以上SKID算法的步骤清晰地总结于算法~\ref{alg:skid_train}及算法~\ref{alg:skid_test}中。
+对于测试阶段，本方法遵循与训练阶段完全一致的处理流程：首先从模型输出中提取稀疏表征，并经由知识冲突消解得到样本级特征向量；然后仅保留训练阶段确定的关键维度集合$\mathcal{K}$，构造测试特征矩阵$\mathbf{F}_{\mathrm{test}}\in\mathbb{R}^{N_{\mathrm{test}}\times k}$；最后将其输入训练阶段得到的GAM分类器，输出对应样本的幻觉预测结果与幻觉概率分数。由此，本文完成了从高维稀疏知识冲突表征到最终RAG幻觉检测指标的构建。我们将以上SKID算法的步骤清晰地总结于算法~\ref{alg:skid_train}及算法~\ref{alg:skid_test}中。
 
 \begin{algorithm}[htbp]
 \caption{SKID算法（训练阶段）}
@@ -280,17 +216,17 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \centering
   \caption{SKID实验数据集概览}
   \label{tab:skid_datasets}
-  \begin{autofittabular}{ccccccc}
+  \begin{autofittabular}{lllcc}
   \toprule
-  数据集 & 子集 & 样本数（训练/测试） & 幻觉率\%（训练/测试） & 任务类型 & 领域背景 \\
+  数据集 & 任务类型 & 领域背景 & 样本数（训练/测试） & 幻觉率\%（训练/测试） \\
   \midrule
-  RAGTruth &  & 15,090/2700 & 44.54/34.93 & & & \\
-  | & Data2txt & 5,298/900 & 69.37/64.33 & JSON转文本 & 社区商户点评 \\
-  | & QA & 5,034/900 & 31.07/17.78 & 阅读理解 & 百科常识 \\
-  | & Summary & 4,758/900 & 31.15/22.67 & 文本摘要 & 新闻 \\
-  Dolly & - & 148/149 & 50.68/52.35 & 阅读理解 & 开放事实问答 \\
-  AggreFact & - & 1,236/1,117 & 35.76/29.54 & 文本摘要 & 新闻 \\
-  TofuEval & - & 617/267 & 34.20/36.70 & 文本摘要 & 会议对话 \\
+  RAGTruth & & & 15,090/2700 & 44.54/34.93 \\
+  \quad -- Data2txt & JSON转文本 & 社区商户点评 & 5,298/900 & 69.37/64.33 \\
+  \quad -- QA & 阅读理解 & 百科常识 & 5,034/900 & 31.07/17.78 \\
+  \quad -- Summary & 文本摘要 & 新闻 & 4,758/900 & 31.15/22.67 \\
+  Dolly & 阅读理解 & 开放事实问答 & 148/149 & 50.68/52.35 \\
+  AggreFact & 文本摘要 & 新闻 & 1,236/1,117 & 35.76/29.54 \\
+  TofuEval & 文本摘要 & 会议对话 & 617/267 & 34.20/36.70 \\
   \bottomrule
   \end{autofittabular}
 \end{table}
@@ -299,25 +235,20 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 
 为全面评估所提方法在RAG幻觉检测任务中的性能表现，本文在主实验中采用与参考工作一致的三个评价指标，即AUROC、ACC和F1。同时，为进一步考察模型在多种阈值设定下的性能，本文额外引入FPR95和AUPR作为补充评价指标。其中，AUROC、FPR95和AUPR已在~\ref{subsec:experiment_settings}中进行介绍，在本章节中沿用相同定义进行评估。
 
-对于准确率（Accuracy，ACC），其用于衡量分类器在全部测试样本上的整体判别正确比例。在本实验中，用于判别正负例的阈值设定为0.5，即最终的GAM模型输出高于0.5记为1（幻觉回答样本），否则记为0（忠实回答样本）。设测试集中共有$N$个样本，其中真正例、真负例、假正例和假负例的数量分别记为$\mathrm{TP}$、$\mathrm{TN}$、$\mathrm{FP}$和$\mathrm{FN}$，则ACC定义为
-
+对于准确率（Accuracy，ACC），其用于衡量分类器在全部测试样本上的整体判别正确比例。在本实验中，用于判别正负例的阈值设定为0.5，即最终的GAM模型输出高于0.5记为1（幻觉回答样本），否则记为0（忠实回答样本）。设测试集中共有$N$个样本，其中真正例（True Positive）、真负例（True Negative）、假正例（False Positive）和假负例（False Negative）的数量分别记为$\mathrm{TP}$、$\mathrm{TN}$、$\mathrm{FP}$和$\mathrm{FN}$，则ACC定义为
 \begin{equation}
 \mathrm{ACC}=\frac{\mathrm{TP}+\mathrm{TN}}{\mathrm{TP}+\mathrm{TN}+\mathrm{FP}+\mathrm{FN}}.
 \end{equation}
 
 该指标能够直接反映模型整体分类结果的正确程度，但在类别分布不均衡时，可能不足以充分体现模型对少数类样本的识别能力。对于F1值，其综合考虑了分类器的精确率（Precision）与召回率（Recall），能够更平衡地评价模型对正类样本的检测效果。首先，精确率与召回率分别定义为
-
 \begin{equation}
 \mathrm{Precision}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}},
 \quad \mathrm{Recall}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}.
 \end{equation}
-
 在此基础上，F1值定义为Precision与Recall的调和平均，即
-
 \begin{equation}
 \mathrm{F1}=\frac{2\cdot \mathrm{Precision}\cdot \mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}}.
 \end{equation}
-
 相较于仅考察某一单独指标，F1能够更有效地反映分类器在“减少误报”与“避免漏检”之间的综合表现，因此也是二分类检测任务中常用的重要评价指标。
 
 综上，本文最终采用AUROC、ACC、F1、FPR95和AUPR五项指标对各方法进行系统评估。其中，AUROC、FPR95和AUPR主要用于衡量模型在不同判别阈值下的整体检测能力与排序能力；ACC和F1则在固定阈值分类决策下，分别从总体正确率与正类识别效果两个角度补充评价模型性能。与~\ref{subsec:experiment_settings}相同，本实验中同样以AUROC为主指标。通过结合多种指标，能够更全面地分析不同方法在RAG幻觉检测任务中的实际表现。
@@ -326,7 +257,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 
 与\ref{chp:chapter3}中的幻觉检测数据集不同，本方法中使用的针对RAG幻觉检测的数据集均预置“输出”部分，而不依赖特定大模型实时输出。因此，在检测过程中，大模型仅用于编码“输入-输出”文本，用于提取内部表征，并不实际进行数据集所示任务输出。
 
-在本实验中，为便于对比，我们采用与参考方法一致的Llama-2-7B\footnote{https://huggingface.co/meta-llama/Llama-2-7b\cite{touvron2023llama2}}模型。该大模型属于当前主流的开源指令微调模型之一，性能及参数量较为合适，在保证了一定语义理解力及编码质量的同时，维持了较低的计算开销。对于使用的SAE模型，我们采取了与大模型相对应的开源预训练SAE\footnote{https://huggingface.co/yuzhaouoe/Llama2-7b-SAE\cite{zhao2025steering}}，并采用默认的模型第15层的输出隐藏表征计算稀疏表示。该模型将Llama-2-7B原始的隐藏表征维度从4,096维放大32倍至131,072维。本实验中的所有环节均可在一张NVIDIA RTX A6000（48GB显存）显卡上运行。
+在本实验中，为便于对比，我们采用与参考方法一致的Llama-2-7B\footnote{https://huggingface.co/meta-llama/Llama-2-7b\cite{touvron2023llama2}}模型。该大模型属于当前主流的开源指令微调模型之一，性能及参数量较为合适，在保证了一定语义理解力及编码质量的同时，维持了较低的计算开销。对于使用的SAE模型，我们采取了与大模型相对应的开源预训练SAE\footnote{https://huggingface.co/yuzhaouoe/Llama2-7b-SAE\cite{zhao2025steering}}，并采用默认的模型第15层的输出隐藏表征计算稀疏表示。该模型将Llama-2-7B原始的隐藏表征维度从4,096维放大32倍至131,072维。本实验中的所有环节均可在一张NVIDIA RTX A6000（显存48GB）显卡上运行。
 
 \subsubsection{对比方法}
 
@@ -334,7 +265,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 
 \begin{itemize}
   \item RAG幻觉检测方法，包括ReDeEP\cite{sun2025redeep}、RAGLens\cite{xiong2025toward}。该类方法面向检索增强生成场景进行专门设计，重点关注生成内容与检索证据之间的支持关系及其失配现象，与本文所研究的场景完全一致。
-  \item 通用幻觉检测方法，包括ITI\cite{li2023inference}、SAPLMA\cite{azaria2023internal}和EigenScore\cite{chen2024inside}。这类方法虽适配于~\ref{chp:chapter3}所示场景，但也可应用于本章的RAG设定。这类方法通常不显式依赖RAG中的外部检索信息，而是从模型内部表征、隐藏状态或统计几何特征中挖掘可用于判别幻觉的信号。
+  \item 非RAG场景下的白盒幻觉检测方法，包括ITI\cite{li2023inference}、SAPLMA\cite{azaria2023internal}和EigenScore\cite{chen2024inside}。这类方法虽适配于~\ref{chp:chapter3}所示场景，但也可应用于本章的RAG设定。这类方法通常不显式依赖RAG中的外部检索信息，而是从模型内部表征、隐藏状态或统计几何特征中挖掘可用于判别幻觉的信号。
   \item 基于文本引导的大模型自评估方法，包括P(True)\cite{kadavath2022language}和SelfCheckGPT\cite{manakul2023selfcheckgpt}。前者通过提示模型直接估计其输出内容为真的概率，后者则通过多次采样并比较不同生成结果之间的一致性来判断幻觉风险。SelfCheckGPT是该类方法中的代表性工作。
   \item 黑盒统计特征方法，包括LN-Entropy\cite{malinin2021uncertainty}。该类方法不依赖对模型内部机制的显式干预，而是根据生成分布或输出统计量构造检测指标；其中LN-Entropy是一种具有代表性的基于统计不确定性的黑盒特征，应用token长度作归一化，是黑盒方法中性能较好的方法。
 \end{itemize}
@@ -349,7 +280,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \centering
   \caption{SKID在RAGTruth与Dolly数据集上的实验结果}
   \label{tab:skid_main_result}
-  \begin{autofittabular}{ccccccc}
+  \begin{autofittabular}{lcccccc}
   \toprule
   \multirow{2}{*}{方法} & \multicolumn{3}{c}{RAGTruth} & \multicolumn{3}{c}{Dolly}\\
    & AUROC~$\uparrow$ & ACC~$\uparrow$ & F1~$\uparrow$ & AUROC~$\uparrow$ & ACC~$\uparrow$ & F1~$\uparrow$\\
@@ -374,8 +305,8 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 由表~\ref{tab:skid_main_result}总体来看，所提方法在两个数据集上均取得了具有竞争力甚至最优的性能，验证了其在RAG幻觉检测任务中的有效性。我们将表中数据分析如下：
 
 \begin{itemize}
-  \item 从纵向对比角度分析，与现有各类方法相比，SKID在核心指标AUROC上均取得了最优结果，在RAGTruth和Dolly数据集上分别达到82.21\%和76.00\%，相较于当前表现较强的RAG专用方法（如ReDeEP与RAGLens）仍有进一步提升。这表明本文方法在不同判别阈值下均具备更稳定、更准确的排序能力，能够更有效地区分幻觉样本与非幻觉样本。在ACC与F1指标上，SKID同样表现出较强竞争力：在RAGTruth数据集上取得三项指标的全面最优，在Dolly数据集上也基本达到最优水平，与最佳结果差距极小，整体性能保持领先。相比之下，部分通用幻觉检测方法（如ITI、SAPLMA）以及基于统计特征的方法（如LN-Entropy）整体表现相对较弱，说明仅依赖模型内部信号或黑盒统计特征，难以充分刻画RAG场景下“内外知识冲突”这一关键因素。
-  \item 进一步分析不同类别方法的表现，可以发现RAG专用方法（如ReDeEP与RAGLens）整体优于通用幻觉检测方法与黑盒方法，验证了显式建模检索知识的重要性。在此基础上，本文方法通过在稀疏特征空间中进行知识冲突消解建模，相较于RAGLens进一步提升了检测性能，说明在高维可解释表征上进行更精细的特征筛选与冲突建模能够带来额外收益。值得注意的是，EigenScore在Dolly数据集上的F1指标达到72.41\%，表现突出，但其在AUROC与ACC指标上相对不稳定，说明其判别能力在不同阈值或不同数据分布下存在一定波动；而本文方法在多个指标上均保持较为均衡的表现，体现出更好的整体稳定性。
+  \item 从纵向对比角度分析，与现有各类方法相比，SKID在核心指标AUROC上均取得了最优结果，在RAGTruth和Dolly数据集上分别达到82.21\%和76.00\%，相较于当前表现较强的RAG专用方法（如ReDeEP与RAGLens）仍有进一步提升。这表明本文方法在不同判别阈值下均具备更稳定、更准确的排序能力，能够更有效地区分幻觉样本与非幻觉样本。在ACC与F1指标上，SKID同样表现出较强竞争力：在RAGTruth数据集上取得三项指标的全面最优，在Dolly数据集上也基本达到最优水平，与最佳结果差距极小，整体性能保持领先。相比之下，部分白盒幻觉检测方法（如ITI、SAPLMA）以及基于统计特征的方法（如LN-Entropy）整体表现相对较弱，说明仅依赖模型内部信号或黑盒统计特征，难以充分刻画RAG场景下“内外知识冲突”这一关键因素。
+  \item 进一步分析不同类别方法的表现，可以发现RAG幻觉检测方法（如ReDeEP与RAGLens）整体优于白盒与黑盒幻觉检测方法方法，验证了显式建模检索知识的重要性。在此基础上，本文方法通过在稀疏特征空间中进行知识冲突消解建模，相较于RAGLens进一步提升了检测性能，说明在高维可解释表征上进行更精细的特征筛选与冲突建模能够带来额外收益。值得注意的是，EigenScore在Dolly数据集上的F1指标达到72.41\%，表现突出，但其在AUROC与ACC指标上相对不稳定，说明其判别能力在不同阈值或不同数据分布下存在一定波动；而本文方法在多个指标上均保持较为均衡的表现，体现出更好的整体稳定性。
   \item 从横向对比角度来看，SKID在两个数据集上均取得一致性的优良表现，说明该方法具有较好的跨数据集泛化能力。无论是在以RAGTruth为代表的多来源多任务数据集，还是在Dolly开放式阅读理解问答的数据分布下，SKID均能够稳定提升AUROC等关键指标，表明其所构建的“稀疏特征+知识冲突消解”框架能够有效捕捉RAG幻觉的本质特征，而不依赖于特定数据集的分布特性。\ref{subsec:skid_ablation}进一步从更多数据集和更多评价指标上验证SKID的这一性能特点。
 \end{itemize}
 
@@ -393,7 +324,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \centering
   \caption{SKID在更多评价指标与数据集上的实验结果}
   \label{tab:skid_more_metrics_and_datasets}
-  \begin{autofittabular}{ccccccc}
+  \begin{autofittabular}{llccccc}
   \toprule
   数据集 & 方法 & AUROC~$\uparrow$ & FPR95~$\downarrow$ & AUPR~$\uparrow$ & ACC~$\uparrow$ & F1~$\uparrow$ \\
   \midrule
@@ -429,7 +360,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \centering
   \caption{SKID在RAGTruth的三个子数据集上的实验结果}
   \label{tab:skid_ragtruth_subsets}
-  \begin{autofittabular}{ccccccc}
+  \begin{autofittabular}{llccccc}
   \toprule
   数据集 & 方法 & AUROC~$\uparrow$ & FPR95~$\downarrow$ & AUPR~$\uparrow$ & ACC~$\uparrow$ & F1~$\uparrow$ \\
   \midrule
@@ -451,7 +382,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
 
 综上所述，实验结果表明，SKID在自然语言形式一致的RAG场景中能够充分发挥其优势，但在检索内容与生成输出存在显著表达差异（如结构化数据到文本生成）的任务中，其基于token匹配的冲突消解策略仍存在一定局限性。这一现象也为后续工作提供了改进方向，即探索更加语义层面或结构感知的知识对齐与消解方法，以进一步提升方法在复杂RAG场景下的适用性与鲁棒性。
 
-\subsubsection{$k$值}
+\subsubsection{最高互信息特征筛选维度数$k$}
 
 在~\ref{subsec:skid_hallucination_score_definition}中，我们讨论了幻觉指标构建方法，其中包括从高维稀疏特征中选取其中互信息最高的$k$个维度构成关键特征集合。在本实验中，$k$值的选取与SKID算法的性能存在密切的关系。SKID算法与对比算法在RAGTruth的两个子数据集上的AUROC性能随$k$值变化的趋势如图~\ref{fig:skid_k}所示。
 
@@ -508,7 +439,7 @@ P\left(C=1|\mathbf{f}\right)=\sigma\!\left(g(\mathbf{f})\right),
   \centering
   \caption{SKID在TofuEval上的可解释性分析}
   \label{tab:skid_interpretability}
-  \begin{autofitxtabular}{cccY}
+  \begin{autofitxtabular}{lllY}
   \toprule
   维度序号 & 互信息 & 幻觉类型 & 具体解释 \\
   \midrule

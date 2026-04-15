@@ -1,35 +1,27 @@
 \chapter{基于多方向表征建模的幻觉检测方法}\label{chp:chapter3}
 
-% 第一项研究内容面向通用幻觉检测任务。针对现有方法对大模型内部表征信息利用不充分，以及部分方法依赖标注训练、跨模型与跨领域泛化能力受限的问题，本文拟从大语言模型生成过程中的隐藏状态与激活表示出发，研究一种\emph{基于多方向表征建模的幻觉检测方法}。其具体贡献如下：
+% 第一项研究内容针对现有幻觉检测方法部分方法依赖标注训练数据集导致泛化差的问题，本文拟从大语言模型生成过程中的隐藏状态与激活表示出发，研究一种\emph{基于多方向表征建模的幻觉检测方法}。其具体贡献如下：
 
 % \begin{itemize}
-%     \item 提出一种基于多方向表征建模的幻觉检测方法ATScore（Activation Tensor Score）。针对现有方法内部表征信息利用不充分的问题，提出在三维激活张量的统一视角下看待跨层和跨token方向的表征信息，从两个维度挖掘模型内部表征中蕴含的幻觉线索，最终实现对内部表征信息的充分利用。
-%     \item 利用多方向链式表征建模深入探索大语言模型内部表征的演化结构，从而高效地利用模型内部表征的动态变化特征，构建更稳定、有效且免于训练的幻觉检测信号，同时保证检测的低开销和良好的跨模型、跨领域泛化能力。
+%     \item 提出一种基于多方向表征建模的幻觉检测方法ATScore（Activation Tensor Score）。利用多方向链式表征建模深入探索大语言模型内部表征的演化结构，从而高效地利用模型内部表征的动态变化特征，构建更稳定、有效且免于训练的幻觉检测信号，同时保证检测的低开销和良好的跨模型、跨领域泛化能力。
+%     \item ATScore提出在三维激活张量的统一视角下看待跨层和跨token方向的表征信息，从两个维度挖掘模型内部表征中蕴含的幻觉线索，最终实现对内部各位置表征信息的充分利用。
 %     \item 在多个开源大模型和公开幻觉检测数据集上进行全面评估，并针对多种算法变体进行多种消融实验，验证所提出方法在不同模型、不同任务和不同领域上的有效性与泛化能力。与现有主流方法进行对比分析，展示其在提升幻觉检测准确性、稳定性以及跨场景适用性方面的优势。
 % \end{itemize}
 
-如何充分利用大语言模型的内部表征来提升幻觉检测性能，是当前研究的一个重要方向。现有方法对大模型内部表征利用的不充分体现常在两方面：一是\emph{单方向建模局限}，多数方法仅沿layer或token单一方向分析表示，忽略了二者之间的耦合结构；二是\emph{静态表示局限}，仅关注局部或单点表示，缺乏对表示随生成过程演化的整体建模。上述局限使得模型难以充分刻画隐藏状态中的动态异常模式，从而限制了幻觉检测性能。
+现有幻觉检测方法虽然已取得一定进展，但其中相当一部分方法依赖标注训练数据集来学习判别信号，因而在跨数据集、跨场景甚至跨模型设置下往往面临泛化能力受限的问题。相比之下，大语言模型生成过程中的内部表征蕴含了更丰富的中间语义与推理信息，有望为构造无需额外训练、具备更强泛化能力的幻觉检测信号提供新的切入点。然而，如何有效挖掘并利用这些内部表征，仍是当前研究中的一个关键问题。
 
-本章针对现有方法内部表征信息利用不充分的问题，提出ATScore（Activation Tensor Score）算法，在三维激活张量的统一视角下看待跨层和跨token方向的表征信息，从两个维度挖掘模型内部链式表征中蕴含的幻觉线索，最终实现对内部表征信息的充分利用。
+本章针对现有幻觉检测方法依赖标注训练数据集、导致泛化能力受限的问题，提出ATScore（Activation Tensor Score）算法。该方法在三维激活张量的统一视角下刻画大语言模型内部表征，并沿跨层与跨词元两个方向进行链式建模，从而从内部表征演化过程中挖掘与幻觉相关的异常线索，构造一种无需额外训练的白盒幻觉检测信号。
 
 \section{问题设定}
 
-本文采用当前较为主流且实现简便的大模型幻觉检测问题定义。给定一个大模型$M$、一段用户输入文本的token序列$X=\{x_1, x_2, \ldots, x_n\}$及其对应的标准答案$Z=\{z_1, z_2, \ldots, z_k\}$，以及模型生成的输出文本token序列$Y=\{y_1, y_2, \ldots, y_m\}$，其中$n$、$k$和$m$分别表示对应序列中的token数量。幻觉检测任务的目标是判断模型生成的输出文本$Y$中是否包含幻觉内容，即判断其是否与标准答案$Z$在语义上保持一致。
+本文采用当前较为主流且实现简便的大模型幻觉检测问题定义。给定一个大模型$M$、一段用户输入文本的词元（token）序列$X=\{x_1, x_2, \ldots, x_n\}$及其对应的标准答案$Z=\{z_1, z_2, \ldots, z_k\}$，以及模型生成的输出文本token序列$Y=\{y_1, y_2, \ldots, y_m\}$，其中$n$、$k$和$m$分别表示对应序列中的token数量。幻觉检测任务的目标是判断模型生成的输出文本$Y$中是否包含幻觉内容，即判断其是否与标准答案$Z$在语义上保持一致。
 
-从形式上看，幻觉检测可以建模为一个二分类问题，其目标是学习如下判别函数：
-
-\begin{equation}
-f(M, X, Y) \rightarrow \{0, 1\},
-\end{equation}
-
-其中，$f$表示幻觉检测模型。当输出为1时，表示模型输出中存在幻觉内容；当输出为0时，表示模型输出中不存在幻觉内容。换言之，该任务关注的是模型输出的事实正确性或语义一致性，而非仅仅关注其语言表达是否流畅自然。
+从形式上看，幻觉检测可以建模为一个简单的二分类问题，其目标是学习一个判别函数$f(M, X, Y) \rightarrow \{0, 1\}$，其中，$f$表示幻觉检测模型。当输出为1时，表示模型输出中存在幻觉内容；当输出为0时，表示模型输出中不存在幻觉内容。换言之，该任务关注的是模型输出的事实正确性或语义一致性，而非仅仅关注其语言表达是否流畅自然。
 
 在白盒设定下，除了模型生成的输出文本$Y$之外，大模型在生成过程中产生的一系列内部隐藏状态同样是可获取的。此时，幻觉检测问题可以建模为：
-
 \begin{equation}
 f(M,X,Y,H)\rightarrow \{0,1\},
 \end{equation}
-
 其中$H$表示模型在生成过程中得到的内部表征集合。这些内部表征包含了模型在不同层、不同token位置上的中间语义信息，因此也可以作为额外输入提供给幻觉检测模型，以辅助判断模型输出的幻觉程度。相比仅依赖最终输出文本的黑盒设定，白盒设定能够更加充分地利用模型内部信息，为幻觉检测提供更丰富的判别依据。
 
 进一步地，关于“模型输出是否与标准答案一致”的判定方式，需要结合具体数据集的任务形式来确定。在封闭式问题设定中，例如选择题、判断题等任务，模型输出通常具有较为明确的标准形式。此时，可以先利用正则表达式等工具对模型输出进行解析，再将解析结果与标准答案进行直接比较，从而判断模型是否回答正确。由于此类任务答案空间相对有限，因此判定标准通常较为直接。
@@ -48,19 +40,14 @@ f(M,X,Y,H)\rightarrow \{0,1\},
     \caption{ATScore算法框架图}\label{fig:atscore_overview}
 \end{figure}
 
-% TODO：图待改进，激活张量，背景改为灰底
-% TODO：写算法
-
 \subsection{三维内部表征建模}
 
-在大语言模型的生成过程中，隐藏状态不仅在层间逐步演化，同时也随着生成序列在时间维度上不断展开。因此，如何从多维度刻画内部表征的动态变化，对于识别潜在的幻觉信号具有重要意义。模型在生成过程中产生的不稳定或异常表征，往往可以通过隐藏状态的结构性变化体现出来。为系统刻画这一过程，本文采用与已有工作\cite{bar2025beyond}一致的内部表征提取方式，并在此基础上进行统一建模。具体而言，类似于式~\ref{eq:activation_tensor}，我们定义“激活张量”（Activation Tensor）为$A \in \mathbb{R}^{L \times T \times d}$，其中$L$表示Transformer的层数，$T$表示生成输出文本的token数量，$d$表示每层隐藏状态的维度。
+在大语言模型的生成过程中，隐藏状态不仅在层间逐步演化，同时也随着生成序列在时间维度上不断展开。因此，如何从多维度刻画内部表征的动态变化，对于识别潜在的幻觉信号具有重要意义。模型在生成过程中产生的不稳定或异常表征，往往可以通过隐藏状态的结构性变化体现出来。为系统刻画这一过程，本文采用与已有工作\cite{bar2025beyond}一致的内部表征提取方式，并在此基础上进行统一建模。具体而言，我们定义“激活张量”（Activation Tensor）为$A \in \mathbb{R}^{L \times T \times d}$，其中$L$表示Transformer的层数，$T$表示生成输出文本的token数量，$d$表示每层隐藏状态的维度。
 
 具体地，对于生成输出序列中的每一个token $y_t$（$t = 1, 2, \ldots, T$），我们提取模型在生成该token时各层Transformer模块的隐藏状态，即
-
 \begin{equation}
 A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 \end{equation}
-
 其中$\mathbf{a}_{\ell,t} \in \mathbb{R}^d$表示第$\ell$层在生成第$t$个token时的隐藏状态向量。通过对所有token重复该过程，可以构建完整的三维激活张量$A$，从而同时保留跨层（layer-wise）与跨token（token-wise）的表征信息。
 
 与仅关注单层或单token位置的局部表示不同，该三维张量提供了一种更加结构化的视角，使得我们能够从不同维度刻画模型内部表征的变化模式。例如，沿layer维度可以刻画信息在网络深度方向上的传播过程，而沿token维度则反映生成序列随时间展开的语义演化轨迹。这种多维结构为后续挖掘幻觉相关信号提供了更丰富的信息基础。
@@ -74,12 +61,10 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 \subsubsection{链式表征的基本定义}
 
 设$\mathbf{a}_{\ell,t} \in \mathbb{R}^{d}$表示激活张量中第$\ell$层、第$t$个token对应的隐藏状态向量，其中$\ell = 1,2,\dots,L$，$t = 1,2,\dots,T$。链式表征的目标是将原始的三维张量映射为一条由若干embedding组成的有序链；为此，在保留某一主方向顺序结构的同时，需对另一辅助方向进行压缩聚合。从而形式上，若链中共有$N$个状态点，则可表示为
-
 \begin{equation}
   \label{eq:chain_representation}
   \mathcal{H} = \{\mathbf{h}_1,\mathbf{h}_2,\dots,\mathbf{h}_N\}, \qquad \mathbf{h}_i \in \mathbb{R}^{d}.
 \end{equation}
-
 这里，$\mathcal{H}$中的每一个状态向量$\mathbf{h}_i$可视为三维激活张量$A$在某一主方向位置上、融合另一辅助方向信息后得到的表征摘要。由于这些状态向量具有天然的顺序关系，因此可以进一步视为潜在表示空间中的一条离散轨迹。类似于人类大脑思考问题时的逻辑链，这些状态向量同样可以在某种程度上视为是大模型的“思维链”。本文的基本假设是：当模型生成事实一致、语义可靠的内容时，其内部表示轨迹通常更平滑、更稳定，并呈现出不同于幻觉生成样本的几何特征；相反，当模型生成幻觉内容时，内部状态往往会出现异常的跳变、偏折或不一致性，这些差异可以通过链式表征的几何统计量加以刻画。
 
 基于“主方向--辅助方向”的建模思想，本文考虑如下两类互补的链式构造方式。
@@ -89,13 +74,10 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 第一类链式表征以layer为主方向，即保持网络深度方向上的顺序结构，同时对token方向的信息进行聚合。该方式与已有工作\cite{wang2025latent}中从层间表示演化角度刻画模型内部状态的思路一致，其关注的是：对于同一段生成文本，模型的整体句子级表示如何随着网络层数逐步变化。
 
 具体而言，对于第$\ell$层的所有token隐藏状态$\{\mathbf{a}_{\ell,1},\mathbf{a}_{\ell,2},\dots,\mathbf{a}_{\ell,T}\}$，本文在token方向采用聚合算子$\phi_t(\cdot)$，得到该层对应的链状态
-
 \begin{equation}
   \mathbf{h}^{(\mathrm{layer})}_{\ell} = \phi_t\big(\mathbf{a}_{\ell,1},\mathbf{a}_{\ell,2},\dots,\mathbf{a}_{\ell,T}\big), \quad \ell = 1,2,\dots,L.
 \end{equation}
-
 于是可得到一条长度为$L$的layer链
-
 \begin{equation}
   \mathcal{H}^{(\mathrm{layer})}
   =
@@ -106,41 +88,19 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \mathbf{h}^{(\mathrm{layer})}_{L}
   \right\}.
 \end{equation}
-
-其中，token方向的聚合算子$\phi_t(\cdot)$可以有多种实现方式。本文重点考虑如下两种简单而有效的无参数聚合方式：
-
-\begin{equation}
-\phi_t^{\mathrm{avg}}
-=
-\frac{1}{T}\sum_{t=1}^{T}\mathbf{a}_{\ell,t},
-\label{eq:token_avg_pooling}
-\end{equation}
-
-即对该层所有token隐藏状态取平均，以获得句子级全局表示；以及
-
-\begin{equation}
-\phi_t^{\mathrm{last}}
-=
-\mathbf{a}_{\ell,T},
-\label{eq:token_last_pooling}
-\end{equation}
-
-即取最后一个输出token对应的隐藏状态，以强调生成末端的决策信息。前者更关注整体语义摘要，后者则更接近许多语言模型中常用的末位置表征方式。因大模型的逐token输出特性，末token通常能够携带更多的上下文信息，适于用作句子级表征。通过比较不同聚合方式，能够考察辅助方向压缩策略对链式几何特征的影响。
+其中，token方向的聚合算子$\phi_t(\cdot)$可以有多种实现方式。本文重点考虑如下两种简单而有效的无参数聚合方式：$\phi_t^{\mathrm{avg}}=\frac{1}{T}\sum_{t=1}^{T}\mathbf{a}_{\ell,t}$，即对该层所有token隐藏状态取平均，以获得句子级全局表示；以及$\phi_t^{\mathrm{last}}=\mathbf{a}_{\ell,T}$，即取最后一个输出token对应的隐藏状态，以强调生成末端的决策信息。前者更关注整体语义摘要，后者则更接近许多语言模型中常用的末位置表征方式。因大模型的逐token输出特性，末token通常能够携带更多的上下文信息，适于用作句子级表征。通过比较不同聚合方式，能够考察辅助方向压缩策略对链式几何特征的影响。
 
 \subsubsection{基于token主方向的链式表征}
 
 与上述方法不同，本文更关注另一种对偶但尚未被充分研究的建模视角，即以token为主方向构建链式表征，同时对layer方向进行聚合。该方式保留了生成序列随时间展开的顺序结构，关注的是：在整个生成过程中，每个位置上的表示在融合多层信息后如何形成一条沿输出序列推进的潜在语义轨迹。
 
 具体而言，对于第$t$个token在所有层上的隐藏状态$\{\mathbf{a}_{1,t},\mathbf{a}_{2,t},\dots,\mathbf{a}_{L,t}\}$，本文在layer方向采用聚合算子$\phi_{\ell}(\cdot)$，得到该token对应的链状态
-
 \begin{equation}
   \mathbf{h}^{(\mathrm{token})}_{t}
   =
   \phi_{\ell}\big(\mathbf{a}_{1,t},\mathbf{a}_{2,t},\dots,\mathbf{a}_{L,t}\big), \qquad t = 1,2,\dots,T,
 \end{equation}
-
 从而构造出一条长度为$T$的token链
-
 \begin{equation}
   \mathcal{H}^{(\mathrm{token})}
   =
@@ -151,49 +111,26 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \mathbf{h}^{(\mathrm{token})}_{T}
   \right\}.
 \end{equation}
-
-类似地，layer方向的聚合算子$\phi_{\ell}(\cdot)$也可采用无参数聚合方式实现，例如
-
-\begin{equation}
-  \phi_{\ell}^{\mathrm{avg}}
-  =
-  \frac{1}{L}\sum_{\ell=1}^{L}\mathbf{a}_{\ell,t},
-  \label{eq:layer_avg_pooling}
-\end{equation}
-
-以及
-
-\begin{equation}
-  \phi_{\ell}^{\mathrm{last}}
-  =
-  \mathbf{a}_{L,t}.
-  \label{eq:layer_last_pooling}
-\end{equation}
-
-其中，式~\ref{eq:layer_avg_pooling}通过聚合多层信息获得更加平滑、全面的token级表示；式~\ref{eq:layer_last_pooling}则突出最高层对当前token的最终语义编码。类似于人类大脑中语言思维发展的方向，与沿layer方向构链相比，沿token方向构链能够更直接地刻画生成过程中的逐步语义推进与局部状态变化，因此对于识别“模型在何处开始偏离事实约束”这一问题具有更强的刻画能力。这也是本文相较于已有链式表征方法的重要区别之一。
+类似于基于layer主方向的链式表征，layer方向的聚合算子$\phi_{\ell}(\cdot)$也可采用无参数聚合方式实现，例如$\phi_{\ell}^{\mathrm{avg}}=\frac{1}{L}\sum_{\ell=1}^{L}\mathbf{a}_{\ell,t}$以及$\phi_{\ell}^{\mathrm{last}}=\mathbf{a}_{L,t}$。类似于人类大脑中语言思维发展的方向，与沿layer方向构链相比，沿token方向构链能够更直接地刻画生成过程中的逐步语义推进与局部状态变化，因此对于识别“模型在何处开始偏离事实约束”这一问题具有更强的刻画能力。这也是本文相较于已有链式表征方法的重要区别之一。
 
 \subsubsection{辅助方向聚合的可能变体}
 
 除了上述avg与last两类基础聚合方式外，辅助方向的压缩还可以扩展为更多变体。例如，可以仅对中间若干层进行平均，以突出模型内部较稳定的语义表征；也可以对前后若干token进行局部窗口聚合，以降低极端位置噪声对链式表征的影响；还可以引入加权平均形式，使不同层或不同token在聚合时具有不同贡献。若记辅助方向上的若干隐藏状态为$\{\mathbf{v}_1,\mathbf{v}_2,\dots,\mathbf{v}_m\}$，则更一般的聚合形式可写为
-
 \begin{equation}
 \phi(\mathbf{v}_1,\dots,\mathbf{v}_m)
 =
 \sum_{i=1}^{m} w_i \mathbf{v}_i, \quad \sum_{i=1}^{m} w_i = 1.
 \end{equation}
-
 其中$w_i$为预先设定或数据驱动得到的权重。本文主要采用无参数的last与avg两类聚合方式，一方面是因为其形式简单、计算代价低；另一方面也有助于避免额外训练参数带来的模型依赖性，从而更好地体现无需训练（training-free）方法在跨模型、跨领域设定下的泛化优势。本文以下实验部分若无特殊说明，默认采用last方式进行辅助方向聚合。我们将在~\ref{subsec:ablation}中探讨辅助方向聚合方式的选择。
 
 \subsubsection{链式表征的几何指标构造}
 
 链式表征$\mathcal{H}$可视为嵌入空间$\mathbb{R}^d$中的一条离散轨迹（discrete trajectory），其沿序列维度刻画了隐藏状态的演化过程。从这一视角出发，轨迹的几何性质（如路径长度与方向变化）能够反映表示的稳定性与一致性，从而为刻画生成过程中的潜在异常提供依据。为刻画链式表征的几何特性，本文关注两类统计量：路径长度用于衡量表示变化的幅度，转折角度用于刻画表示变化的方向稳定性。直观而言，语义一致的生成过程通常对应于平滑且稳定的表示轨迹，而幻觉生成过程则更可能表现为幅度波动或方向突变，因此上述几何指标能够有效区分两类生成模式。设链式表征为式~\ref{eq:chain_representation}所示，则第$i$个相邻状态对之间的位移长度可表示为
-
 \begin{equation}
   \Delta_{i,i+1} = \|\mathbf{h}_{i+1}-\mathbf{h}_i\|_2, \quad i=1,2,\dots,N-1.
 \end{equation}
 
 首先，本文考虑链节点间的平均长度（chain length），用于衡量整条表示轨迹在潜在空间中的累计变化幅度：
-
 \begin{equation}
   \label{eq:chain_length}
   \mathrm{Len}(\mathcal{H})
@@ -202,11 +139,9 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   =
   \frac{1}{N-1}\sum_{i=1}^{N-1}\frac{\|\mathbf{h}_{i+1}-\mathbf{h}_i\|_2}{\mathcal{Z}_\mathrm{Len}}.
 \end{equation}
-
 其中$\mathcal{Z}_\mathrm{Len}$为归一化因子，定义为$\mathcal{Z}_\mathrm{Len}=\Delta_{1,N}=\|\mathbf{h}_{N}-\mathbf{h}_1\|_2$，即链的端到端距离。该指标越大，表示链在相邻状态之间的累计变化越剧烈，模型内部表征演化越不平稳。
 
 进一步地，为刻画链式表征在方向上的折转程度，本文定义相邻位表征向量之间的夹角。对于第$i$个内部节点，其对应的局部转角由余弦相似度的反三角函数得到，可写为
-
 \begin{equation}
 \theta_{i,i+1}
 =
@@ -222,7 +157,6 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 \end{equation}
 
 在此基础上，可定义链的平均转折角度（turning angle）为
-
 \begin{equation}
 \mathrm{Ang}(\mathcal{H})
 =
@@ -230,14 +164,13 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 \sum_{i=1}^{N-1}\frac{\theta_{i,i+1}}{\mathcal{Z}_\mathrm{Ang}}.
 \label{eq:chain_angle}
 \end{equation}
-
 其中$\mathcal{Z}_\mathrm{Ang}=\theta_{1,N}$为归一化因子，即链两端间的转折角，用于将角度变化标准化。该类指标反映了表示轨迹在局部方向上的频繁偏折程度。通常而言，若模型生成过程更加一致、连贯，其内部轨迹往往更平滑，对应较小的局部角度变化；而在生成幻觉内容时，模型可能在内部空间中出现更频繁的方向突变，从而表现出更大的弯曲度。
 
 ~\newline
 
-我们将以上ATScore算法步骤总结在算法~\ref{alg:atscore}中，以便清晰地展示ATScore算法的整体流程。其中，当主方向为layer时，辅助方向聚合算子$\phi_t(\cdot)$可取token方向平均池化或末token池化；当主方向为token时，辅助方向聚合算子$\phi_{\ell}(\cdot)$可取layer方向平均池化或末层池化。其具体定义分别见式~\ref{eq:token_avg_pooling}、式~\ref{eq:token_last_pooling}、式~\ref{eq:layer_avg_pooling}与式~\ref{eq:layer_last_pooling}。
+我们将以上ATScore算法步骤总结在算法~\ref{alg:atscore}中，以便清晰地展示ATScore算法的整体流程。其中，当主方向为layer时，辅助方向聚合算子$\phi_t(\cdot)$可取token方向平均池化或末token池化；当主方向为token时，辅助方向聚合算子$\phi_{\ell}(\cdot)$可取layer方向平均池化或末层池化。
 
-\begin{algorithm}[htbp]
+\begin{algorithm}[htb]
 \caption{ATScore算法}
 \label{alg:atscore}
 \begin{algorithmic}[1]
@@ -298,7 +231,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore实验数据集概览}
   \label{tab:atscore_datasets}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{llll}
   \toprule
   数据集 & 样本数 & 任务类型 & 领域背景 \\
   \midrule
@@ -324,13 +257,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 
 \emph{AUROC}。AUROC（Area Under the Receiver Operating Characteristic Curve）表示接收者操作特征曲线（ROC曲线）下的面积。其中，ROC曲线以假正例率（False Positive Rate, FPR）为横轴，以真正例率（True Positive Rate, TPR）为纵轴，描述分类阈值变化时检测器在不同工作点下的整体表现。AUROC本质上衡量的是检测器对正负样本的排序能力，即随机取一个正样本和一个负样本时，模型将正样本赋予更高风险分数的概率。其取值范围为$[0,1]$，数值越大表示方法的整体区分能力越强；当AUROC为$0.5$时，说明检测效果与随机猜测相当。由于AUROC不依赖于某一个固定阈值，能够较为全面地反映模型在不同判别标准下的总体性能，因此本文将其作为主要评价指标。
 
-\emph{FPR95}。FPR95表示当真正例率达到$95\%$时对应的假正例率，即
-
-\begin{equation}
-  \mathrm{FPR95} = \mathrm{FPR}\big|_{\mathrm{TPR}=95\%}.
-\end{equation}
-
-该指标主要衡量检测器在保证较高召回能力时的误报水平。在幻觉检测任务中，较高的TPR意味着大部分幻觉样本能够被成功识别，而较低的FPR95则说明在此条件下，事实性样本被错误判定为幻觉的比例较低。因此，FPR95越小，表明方法在高召回场景下越具有实用价值。与AUROC相比，FPR95更关注特定工作点下的检测性能，是对整体排序能力的重要补充。
+\emph{FPR95}。FPR95表示当真正例率达到$0.95$时对应的假正例率，该指标主要衡量检测器在保证较高召回能力时的误报水平，即$\mathrm{FPR95} = \mathrm{FPR}\big|_{\mathrm{TPR}=0.95}$。在幻觉检测任务中，较高的TPR意味着大部分幻觉样本能够被成功识别，而较低的FPR95则说明在此条件下，事实性样本被错误判定为幻觉的比例较低。因此，FPR95越小，表明方法在高召回场景下越具有实用价值。与AUROC相比，FPR95更关注特定工作点下的检测性能，是对整体排序能力的重要补充。
 
 \emph{AUPR}。AUPR（Area Under the Precision-Recall Curve）表示精确率--召回率曲线（PR曲线）下的面积。其中，精确率（Precision）表示被判定为正类的样本中真实为正类的比例，召回率（Recall）表示所有正类样本中被正确识别出来的比例。AUPR能够反映模型在不同阈值下对正类样本的识别质量，尤其适用于类别分布不平衡的场景。在幻觉检测任务中，若将幻觉样本视为正类，则AUPR越高，说明模型越能够在保持较高召回的同时减少误报。相较于AUROC，AUPR对正类样本的检测质量更为敏感，因此也常被作为补充指标进行报告。
 
@@ -340,7 +267,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 
 在本实验中，本文统一采用Llama-3-8B-Instruct\footnote{https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct\cite{grattafiori2024llama}}作为基础大语言模型进行评估。该模型属于当前主流的开源指令微调模型之一，在多项生成与推理任务中表现出较强的能力，因而被广泛应用于幻觉检测与不确定性估计相关研究中。为保证实验设置与已有工作的可比性，本文在模型选择上遵循相关研究中的标准配置，统一在同一模型上对不同方法进行评测；与模型生成过程有关的超参数均保持默认值。
 
-此外，本文方法无需对模型进行额外训练或参数微调，所有实验均基于冻结的预训练模型完成。这一设置不仅降低了计算开销，也有助于体现所提出方法在无需训练场景下的实际应用价值与可迁移性。本实验中的所有环节均可在一张NVIDIA RTX A6000（48GB显存）显卡上运行。
+此外，本文方法无需对模型进行额外训练或参数微调，所有实验均基于冻结的预训练模型完成。这一设置不仅降低了计算开销，也有助于体现所提出方法在无需训练场景下的实际应用价值与可迁移性。本实验中的所有环节均可在一张NVIDIA RTX A6000（显存48GB）显卡上运行。
 
 \subsubsection{对比方法}
 
@@ -362,7 +289,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在GSM8K（MGSM）数据集上的实验结果（模型幻觉率：17.6\%）}
   \label{tab:mgsm}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -387,7 +314,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在CommonenseQA数据集上的实验结果（模型幻觉率：27.1\%）}
   \label{tab:csqa}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -412,7 +339,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在Belebele数据集上的实验结果（模型幻觉率：11.6\%）}
   \label{tab:belebele}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -437,7 +364,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在TheoremQA数据集上的实验结果（模型幻觉率：83.2\%）}
   \label{tab:theoremqa}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -462,7 +389,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在TruthfulQA数据集上的实验结果（模型幻觉率：65.2\%）}
   \label{tab:truthfulqa}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -494,13 +421,13 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 
 为更直观地分析不同幻觉检测分数对真实样本与幻觉样本的区分能力，除上述结果外，本文额外在两个数据集上，将测试集样本按照参考标签划分为“真实回答”与“幻觉回答”两组，并分别统计各方法在两组样本上的分数分布，如图~\ref{fig:distribution_mgsm}、图~\ref{fig:distribution_csqa}所示。具体地，本文对每种方法得到的样本级分数采用核密度估计（Kernel Density Estimation, KDE）进行平滑，从而绘制概率密度曲线。图中横轴表示对应方法的检测分数，纵轴表示该分数的概率密度，蓝色曲线与红色曲线分别对应两类样本；两条曲线的相对位置、峰值偏移程度以及重叠面积，能够直观反映该方法对两类样本的可分性。一般而言，若两组样本的分布峰值分离更明显、重叠区域更小，则说明该分数更能够刻画真实与幻觉输出之间的内部表征差异，因而具备更强的判别能力。
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
     \centering
     \includegraphics[width=\textwidth]{figures/content/coe_distribution_mgsm_Llama-3-8B-Instruct_en.pdf}
     \caption{ATScore和对比方法在GSM8K（MGSM）上的幻觉分数分布}\label{fig:distribution_mgsm}
 \end{figure}
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
     \centering
     \includegraphics[width=\textwidth]{figures/content/coe_distribution_commonsenseqa_Llama-3-8B-Instruct_en.pdf}
     \caption{ATScore和对比方法在CommonsenseQA上的幻觉分数分布}\label{fig:distribution_csqa}
@@ -518,13 +445,13 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 
 \subsubsection{辅助方向的聚合方式}
 
-在~\ref{subsec:multi_direction_chain_representation}中，我们讨论了将激活张量分为两个正交的“主-次”方向：其中主方向保留链式顺序结构，另一辅助方向进行压缩聚合。对辅助方向的聚合方式有取辅助方向各元素之平均（avg，见式~\ref{eq:token_avg_pooling}与式~\ref{eq:layer_avg_pooling}）与取末位置元素（last，见式~\ref{eq:token_last_pooling}与式~\ref{eq:layer_last_pooling}）两种。表\ref{tab:mgsm_avg_last}与表~\ref{tab:truthfulqa_avg_last}展示了在不同数据集上两种聚合方式的相对优劣。
+在~\ref{subsec:multi_direction_chain_representation}中，我们讨论了将激活张量分为两个正交的“主-次”方向：其中主方向保留链式顺序结构，另一辅助方向进行压缩聚合。对辅助方向的聚合方式有取辅助方向各元素之平均（avg，如$\phi_t^{\mathrm{avg}}=\frac{1}{T}\sum_{t=1}^{T}\mathbf{a}_{\ell,t}$与$\phi_{\ell}^{\mathrm{avg}}=\frac{1}{L}\sum_{\ell=1}^{L}\mathbf{a}_{\ell,t}$）与取末位置元素（last，如$\phi_t^{\mathrm{last}}=\mathbf{a}_{\ell,T}$与$\phi_{\ell}^{\mathrm{last}}=\mathbf{a}_{L,t}$）两种。表~\ref{tab:mgsm_avg_last}与表~\ref{tab:truthfulqa_avg_last}展示了在不同数据集上两种聚合方式的相对优劣。
 
 \begin{table}[htbp]
   \centering
   \caption{ATScore在GSM8K（MGSM）数据集上不同辅助方向聚合方式的性能}
   \label{tab:mgsm_avg_last}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法及辅助方向聚合方式 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -541,7 +468,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在TruthfulQA数据集上不同辅助方向聚合方式的性能}
   \label{tab:truthfulqa_avg_last}
-  \begin{autofittabular}{cccc}
+  \begin{autofittabular}{lccc}
   \toprule
   方法及辅助方向聚合方式 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -568,7 +495,7 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
   \centering
   \caption{ATScore在TruthfulQA数据集上基于不同判定幻觉标签方法的性能}
   \label{tab:truthfulqa_rouge_llm_judge}
-  \begin{autofittabular}{ccccc}
+  \begin{autofittabular}{clccc}
   \toprule
   判定标签方式 & 方法 & AUROC~$\uparrow$（\%） & FPR95~$\downarrow$（\%） & AUPR~$\uparrow$（\%） \\
   \midrule
@@ -597,4 +524,4 @@ A_{:,t,:} = \{ \mathbf{a}_{1,t}, \mathbf{a}_{2,t}, \ldots, \mathbf{a}_{L,t} \}.
 
 本章围绕大语言模型幻觉检测问题，在明确任务设定的基础上，提出了基于多方向表征建模的ATScore方法。该方法以大模型生成过程中的内部激活为切入点，构建三维激活张量，并分别从layer和token两个方向对其进行链式建模，再结合链长度、转折角度等几何指标实现对幻觉的有效检测。
 
-实验结果表明，ATScore在多个数据集和多种评价指标上均具有良好的竞争力，整体优于多种黑盒与白盒基线方法，其中以token为主方向的变体表现更为突出。消融实验则进一步验证了辅助方向聚合方式以及标签判定策略对性能的影响。综合来看，本章方法在无需额外训练的条件下，充分利用了大模型内部表征中与幻觉相关的动态信号，为后续研究提供了方法基础。
+实验结果表明，ATScore在多个数据集和多种评价指标上均具有良好的竞争力，整体优于多种黑盒与白盒基线方法，其中以token为主方向的变体表现更为突出。消融实验则进一步验证了辅助方向聚合方式以及标签判定策略对性能的影响。综合来看，本章方法在无需训练的条件下，充分利用了大模型内部表征中与幻觉相关的动态信号，展示了跨领域跨数据集的高泛化性能，为后续研究提供了方法基础。
