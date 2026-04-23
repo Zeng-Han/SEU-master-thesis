@@ -215,7 +215,7 @@
     citecolor=red,
     filecolor=magenta,
     menucolor=red,
-    urlcolor=magenta
+    urlcolor=black
 }
 
 % Smart references by label prefix:

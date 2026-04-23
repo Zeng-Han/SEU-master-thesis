@@ -33,7 +33,7 @@ INTEGERS {
 
 FUNCTION {load.config}
 {
-  #1 'uppercase.name :=
+  #0 'uppercase.name :=
   #3 'max.num.authors :=
   #1 'sentence.case.title :=
   #0 'link.title :=
@@ -1035,10 +1035,7 @@ FUNCTION {format.year}
     { date empty$ not
         { date extract.before.dash }
         { "empty year in " cite$ * warning$
-          urldate empty$ not
-            { "[" urldate extract.before.dash * "]" * }
-            { "" }
-          if$
+          ""
         }
       if$
     }
@@ -1063,7 +1060,7 @@ FUNCTION {format.editdate}
 
 FUNCTION {format.urldate}
 { urldate empty$ not entry.is.electronic and
-    { "\allowbreak[" urldate * "]" * }
+    { "\allowbreak " urldate * }
     { "" }
   if$
 }
@@ -1321,9 +1318,9 @@ FUNCTION {monograph}
   format.publisher output
   format.year "year" output.check
   format.pages ". " output.after
-  format.urldate "" output.after
   format.url output
   format.doi output
+  format.urldate "" output.after
   new.block
   format.note output
   fin.entry
@@ -1337,7 +1334,10 @@ FUNCTION {incollection}
   format.title "title" output.check
   "M" set.entry.mark
   format.mark "" output.after
-  new.block
+  entry.mark "C" =
+    { new.slash }
+    { new.block }
+  if$
   format.translators output
   new.block
   format.editors output
@@ -1349,9 +1349,9 @@ FUNCTION {incollection}
   format.publisher output
   format.year "year" output.check
   format.pages ". " output.after
-  format.urldate "" output.after
   format.url output
   format.doi output
+  format.urldate "" output.after
   new.block
   format.note output
   fin.entry
@@ -1370,9 +1370,9 @@ FUNCTION {periodical}
   new.block
   format.address.publisher output
   format.date "year" output.check
-  format.urldate "" output.after
   format.url output
   format.doi output
+  format.urldate "" output.after
   new.block
   format.note output
   fin.entry
@@ -1392,9 +1392,9 @@ FUNCTION {article}
   format.journal.volume output
   format.journal.number "" output.after
   format.journal.pages "" output.after
-  format.urldate "" output.after
   format.url output
   format.doi output
+  format.urldate "" output.after
   new.block
   format.note output
   fin.entry
@@ -1410,9 +1410,9 @@ FUNCTION {patent}
   format.mark "" output.after
   new.block
   format.date "year" output.check
-  format.urldate "" output.after
   format.url output
   format.doi output
+  format.urldate "" output.after
   new.block
   format.note output
   fin.entry
@@ -1432,13 +1432,13 @@ FUNCTION {electronic}
   format.address.publisher output
   format.pages bbl.colon output.after
   format.editdate "" output.after
-  format.urldate "" output.after
-  format.url output
-  format.doi output
+  format.url ", " output.after
   date empty$
-    { format.date output }
+    { format.date ", " output.after }
     'skip$
   if$
+  format.urldate ". " output.after
+  format.doi output
   new.block
   format.note output
   fin.entry
