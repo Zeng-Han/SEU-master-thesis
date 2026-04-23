@@ -422,13 +422,13 @@ f(M,X,Y,H)\rightarrow \{0,1\},
 \begin{figure}[htb]
     \centering
     \includegraphics[width=\textwidth]{figures/content/coe_distribution_mgsm_Llama-3-8B-Instruct_en.pdf}
-    \caption{ATScore和对比方法在GSM8K（MGSM）上的幻觉分数分布}\label{fig:distribution_mgsm}
+    \caption{ATScore和对比方法在GSM8K（MGSM）上的幻觉分数分布图}\label{fig:distribution_mgsm}
 \end{figure}
 
 \begin{figure}[htb]
     \centering
     \includegraphics[width=\textwidth]{figures/content/coe_distribution_commonsenseqa_Llama-3-8B-Instruct_en.pdf}
-    \caption{ATScore和对比方法在CommonsenseQA上的幻觉分数分布}\label{fig:distribution_csqa}
+    \caption{ATScore和对比方法在CommonsenseQA上的幻觉分数分布图}\label{fig:distribution_csqa}
 \end{figure}
 
 从图中可以看出，ATScore系列方法整体上较黑盒统计量方法与传统白盒表征统计方法展现出更清晰的双峰分离趋势，其中ATScore$_{\mathrm{token}}$-Len在两个数据集上表现尤为突出：其真实回答与幻觉回答两组样本的密度峰位置偏移更明显，重叠区域相对更小，说明该方法能够更稳定地捕捉幻觉生成过程中内部表征轨迹的异常变化。这一现象与主实验结果是一致的，即ATScore系列在多数数据集及指标设定下取得最优，而ATScore$_{\mathrm{token}}$-Len则是整体表现最稳定、最优次数最多的变体。综合来看，这些分布图从可视化角度进一步验证了本文方法的有效性，也说明ATScore$_{\mathrm{token}}$-Len能够更充分地利用内部表征中的多方向结构信息，是本文最具代表性的主推方法。
